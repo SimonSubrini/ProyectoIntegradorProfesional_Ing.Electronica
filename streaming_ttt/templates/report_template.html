@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Parte - {{ cabecera.Numero_de_parte }}</title>
+    <style>
+        /* ===================== CONFIGURACIÓN DE PÁGINA ===================== */
+        @page {
+            size: A4;
+            margin: 8mm 10mm 8mm 10mm;
+            /* top right bottom left */
+
+            /* Repetimos los elementos running en los márgenes (WeasyPrint) */
+            @top-center {
+                content: element(page-frame-top);
+            }
+
+            @bottom-center {
+                content: element(page-frame-bottom);
+            }
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 0.55rem;
+            color: #222;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        /* Contenedor de página que rellena y deja que el motor pagine */
+        .page {
+            width: 100%;
+            background: white;
+            /* no forzamos page-break-after; WeasyPrint paginará automáticamente */
+            padding: 5mm 0;
+            /* espacio vertical respecto a márgenes del @page */
+            box-sizing: border-box;
+        }
+
+        /* El marco visual: lo representaremos por elementos running (top/bottom)
+           y además dejamos report-container centrado y sin altura fija. */
+        .report-container {
+            max-width: 190mm;
+            margin: 0 auto;
+            /* centra horizontalmente */
+            padding: 5mm;
+            box-sizing: border-box;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            /* No height, no overflow:hidden */
+        }
+
+        /* ----- ELEMENTOS RUNNING para simular marco por página ----- */
+        /* Estos elementos deben existir en el flujo y se usan en @page */
+        .page-frame-top {
+            position: running(page-frame-top);
+            /* Dibujamos una línea superior y laterales finas: */
+            height: 0px;
+            border-top: 2px solid #000099;
+            /* Para que se vea como marco, dibujamos también líneas laterales con box-shadow negativo no fiable;
+               en su lugar repetimos una línea inferior con page-frame-bottom */
+        }
+
+        .page-frame-bottom {
+            position: running(page-frame-bottom);
+            height: 0px;
+            border-bottom: 2px solid #000099;
+        }
+
+        /* ===================== HEADER ===================== */
+        .header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 140px;
+        }
+
+        .header-logo {
+            height: 1.1cm;
+            display: block;
+            object-fit: contain;
+        }
+
+        .header-title {
+            font-size: 0.9rem;
+            margin: 0;
+            white-space: nowrap;
+            /* fuerza a una sola línea */
+        }
+
+        /* Contenedor derecho: menos gap vertical */
+        .header-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+            /* <--- reducido */
+            min-width: 70px;
+        }
+
+        .header-label {
+            color: #CC0066;
+            font-weight: bold;
+            margin-right: 4px;
+        }
+
+        .grid-cabecera {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            column-gap: 10px;
+            row-gap: 4px;
+            margin-top: 4px;
+            align-items: center;
+        }
+
+        .grid-cabecera .celda {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.48rem;
+            white-space: nowrap;
+            /* evitar saltos de línea */
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .grid-cabecera .celda p {
+            margin: 0;
+        }
+
+        .grid-cabecera .celda p:first-child {
+            font-weight: bold;
+            color: #333;
+        }
+
+        hr.linea-horizontal {
+            margin: 6px 0;
+            border: none;
+            border-top: 2px solid #000099;
+            width: 100%;
+        }
+
+        /* ===================== RESUMEN (tabla) ===================== */
+        .resumen-title {
+            margin-top: 6px;
+            margin-bottom: 4px;
+            font-weight: bold;
+            font-size: 0.6rem;
+        }
+
+        .resumen-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            margin: 6px 0;
+            font-size: 0.5rem;
+            text-align: center;
+        }
+
+        .resumen-table th,
+        .resumen-table td {
+            border: 1px solid #222;
+            padding: 6px 4px;
+            width: 20%;
+            word-wrap: break-word;
+        }
+
+        .resumen-table th {
+            background: #efefef;
+            font-weight: bold;
+        }
+
+        /* ===================== HISTOGRAMAS ===================== */
+        .hist-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 8px 0;
+            align-items: start;
+        }
+
+        .hist-grid.single {
+            grid-template-columns: 1fr;
+        }
+
+        .hist-grid.two {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .figure {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 4px;
+            box-sizing: border-box;
+            page-break-inside: avoid;
+            /* no cortar figura */
+        }
+
+        .figure h4 {
+            margin: 4px 0;
+            font-size: 0.5rem;
+            text-align: center;
+        }
+
+        /* Limites estrictos para el peor caso (3 columnas) */
+        .figure img {
+            display: block;
+            width: auto;
+            max-width: 56mm;
+            /* ancho máximo por columna en 3-col layout */
+            max-height: 60mm;
+            /* altura máxima segura */
+            object-fit: contain;
+            margin: 0 auto;
+        }
+
+        /* ===================== TABLA DE RESULTADOS ===================== */
+        .results-table {
+            margin-top: 8px;
+        }
+
+        .results-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.45rem;
+        }
+
+        .results-table th,
+        .results-table td {
+            border: 1px solid #222;
+            padding: 4px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .results-table th {
+            background: #efefef;
+            font-size: 0.46rem;
+        }
+
+        /* Repeticion del thead en cada pagina */
+        thead {
+            display: table-header-group;
+        }
+
+        tbody {
+            display: table-row-group;
+        }
+
+        tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        /* ===================== FOOTER ===================== */
+        footer {
+            font-size: 0.42rem;
+            text-align: center;
+            color: #555;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Elementos que usaremos como "marco" repetido por página -->
+    <div class="page-frame-top"></div>
+    <div class="page-frame-bottom"></div>
+
+    <div class="page">
+        <div class="report-container">
+
+            <!-- HEADER -->
+            <div class="header" role="banner">
+                <div class="header-left">
+                    <img src="/home/pi/Scripts/ttt/streaming_ttt/utils/TenarisLogo.png" class="header-logo"
+                        alt="TenarisLogo">
+                    <div>
+                        <h1 class="header-title">Parte de campo</h1>
+                    </div>
+                </div>
+
+                <div class="header-right">
+                    <div style="display:flex;align-items:center;"><span class="header-label">Parte:</span><span>{{
+                            cabecera.Numero_de_parte }}</span></div>
+                    <div style="display:flex;align-items:center;"><span class="header-label">Fecha:</span><span>{{
+                            cabecera.Fecha }}</span></div>
+                </div>
+            </div>
+
+            <!-- DETALLES ADICIONALES -->
+            <div class="grid-cabecera">
+                <div class="celda">
+                    <p>Cliente:</p>
+                    <p>{{ cabecera.Nombre_cliente }}</p>
+                </div>
+                <div class="celda">
+                    <p>Resp. Cliente:</p>
+                    <p>{{ cabecera.Nombre_persona_responsable }}</p>
+                </div>
+                <div class="celda">
+                    <p>Yacimiento:</p>
+                    <p>{{ cabecera.Nombre_yacimiento }}</p>
+                </div>
+                <div class="celda">
+                    <p>Equipo:</p>
+                    <p>{{ cabecera.Nombre_equipo }}</p>
+                </div>
+                <div class="celda">
+                    <p>Pozo:</p>
+                    <p>{{ cabecera.Nombre_pozo }}</p>
+                </div>
+                <div class="celda">
+                    <p>Tipo de servicio:</p>
+                    <p>Supervisión de bajada</p>
+                </div>
+                <div class="celda">
+                    <p>Motivo intervención:</p>
+                    <p>{{ cabecera.Motivo_intervención }}</p>
+                </div>
+                <div class="celda">
+                    <p>Resp. Tenaris:</p>
+                    <p>{{ cabecera.Nombre_de_FISE }}</p>
+                </div>
+                <div class="celda">
+                    <p>Unidad Liviana:</p>
+                    <p>{{ cabecera.Patente_vehículo }}</p>
+                </div>
+            </div>
+
+            <hr class="linea-horizontal" />
+
+            <!-- RESUMEN -->
+            <div class="resumen-title">Resumen</div>
+            <table class="resumen-table" role="table" aria-label="Resumen">
+                <thead>
+                    <tr>
+                        <th>Total</th>
+                        <th>OK</th>
+                        <th>NO OK</th>
+                        <th>NO OK REASSEMBLY</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ tabla_resumen.Total }}</td>
+                        <td>{{ tabla_resumen.OK }}</td>
+                        <td>{{ tabla_resumen.NO_OK }}</td>
+                        <td>{{ tabla_resumen.NO_OK_Reassembly }}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- HISTOGRAMAS -->
+            <h2>Histogramas por grado/diámetro</h2>
+            {% set n_hist = histograms | length %}
+            {% set grid_class = 'hist-grid' %}
+            {% if n_hist == 1 %} {% set grid_class = 'hist-grid single' %} {% elif n_hist == 2 %} {% set grid_class =
+            'hist-grid two' %} {% endif %}
+            <div class="{{ grid_class }}">
+                {% for h in histograms %}
+                <div class="figure">
+                    <img src="{{ h.imagen }}" alt="{{ h.titulo }}">
+                </div>
+                {% endfor %}
+            </div>
+
+
+            <hr class="linea-horizontal" />
+
+            <!-- TABLA COMPLETA -->
+            <h2>Detalle de conexiones</h2>
+            <div class="results-table">
+                <table role="table" aria-label="Detalle de conexiones">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Diámetro</th>
+                            <th>Grado acero</th>
+                            <th>Umbral mínimo [mm]</th>
+                            <th>Umbral máximo [mm]</th>
+                            <th>Desplazamiento [mm]</th>
+                            <th>Comentario</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in mediciones %}
+                        <tr>
+                            <td>{{ row.id_conexion }}</td>
+                            <td>{{ row.diametro }}</td>
+                            <td>{{ row.grado_acero }}</td>
+                            <td>{{ row.umbral_min }}</td>
+                            <td>{{ row.umbral_max }}</td>
+                            <td>{{ row.desplazamiento | round(4) }}</td>
+                            <td>{% if row.comentario == 'OK' %}<span style="color:green;font-weight:bold">OK</span>
+                                {% elif row.comentario == 'NO OK'%}<span style="color:red;font-weight:bold">NO OK</span>
+                                {%else %}<span style="color:rgb(243, 169, 10);font-weight:bold">NO OK -
+                                    REASSEMBLY</span>{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
